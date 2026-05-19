@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Packaging Viewer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Jost:wght@700&family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --border: rgba(255, 255, 255, 0.07);
+      --accent: #c8f060;
+      --accent2: #60c8f0;
+      --text: #f0f0f0;
+      --muted: #6b6b7a;
+    }
+
+    html,
+    body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── LOADER ── */
+    #loader {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+
+    #loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .loader-bar-wrap {
+      width: 200px;
+      height: 2px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .loader-bar {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.3s ease;
+      border-radius: 99px;
+    }
+
+    .loader-pct {
+      font-family: 'Syne', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+    }
+
+    /* ── LAYOUT ── */
+    #app {
+      display: grid;
+      grid-template-rows: 56px 1fr 60px;
+      height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10, 10, 15, 0.8);
+      backdrop-filter: blur(12px);
+      z-index: 10;
+    }
+
+    .brand {
+      font-family: 'Futura', 'Jost', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .brand span {
+      color: var(--accent);
+    }
+
+    .header-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.4;
+        transform: scale(0.8);
+      }
+    }
+
+    /* ── CANVAS AREA ── */
+    #canvas-wrap {
+      position: relative;
+      overflow: hidden;
+    }
+
+    #canvas-wrap::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(200, 240, 96, 0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 80%, rgba(96, 200, 240, 0.04) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* ── CONTROLS OVERLAY ── */
+    #controls-overlay {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(19, 19, 26, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 8px 16px;
+      backdrop-filter: blur(12px);
+      z-index: 5;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+
+    .ctrl-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .ctrl-sep {
+      width: 1px;
+      height: 14px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 10px;
+      color: var(--accent);
+    }
+
+    /* ── SIDE PANEL ── */
+    #side-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 5;
+    }
+
+    .panel-btn {
+      height: 40px;
+      padding: 0 16px;
+      background: rgba(19, 19, 26, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.2s;
+      font-size: 11px;
+      font-family: 'DM Sans', sans-serif;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .panel-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .panel-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(200, 240, 96, 0.08);
+    }
+
+    /* ── AUTOROTATE & SPEED CONTROLS ── */
+    #autorotate-group {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #autorotate-badge {
+      font-size: 10px;
+      font-family: 'Syne', sans-serif;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: rgba(19, 19, 26, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 5px 12px;
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    #autorotate-badge.on {
+      color: var(--accent);
+      border-color: rgba(200, 240, 96, 0.3);
+    }
+
+    #speed-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-left: 8px;
+    }
+
+    #speed-controls button {
+      background: rgba(19, 19, 26, 0.8);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+
+    #speed-controls button:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    #speed-level {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      width: 45px;
+      text-align: center;
+    }
+
+    /* ── ERROR MESSAGE ── */
+    #error-msg {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 8;
+      text-align: center;
+      padding: 40px;
+    }
+
+    #error-msg.visible {
+      display: flex;
+    }
+
+    .error-icon {
+      font-size: 36px;
+    }
+
+    .error-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .error-sub {
+      font-size: 13px;
+      color: var(--muted);
+      max-width: 360px;
+      line-height: 1.6;
+    }
+
+    .error-sub code {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 12px;
+      color: var(--accent);
+      font-family: monospace;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      border-top: 1px solid var(--border);
+      background: rgba(10, 10, 15, 0.8);
+      backdrop-filter: blur(12px);
+    }
+
+    .footer-left {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .footer-right {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .footer-right a {
+      color: var(--accent2);
+      text-decoration: none;
+    }
+
+    .footer-right a:hover {
+      text-decoration: underline;
+    }
+
+    /* ── ADMIN UI ── */
+    .hamburger {
+      cursor: pointer;
+      font-size: 18px;
+      color: var(--muted);
+      transition: color 0.2s;
+      user-select: none;
+    }
+
+    .hamburger:hover {
+      color: var(--text);
+    }
+
+    #password-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #password-overlay.hidden {
+      display: none;
+    }
+
+    .pw-box {
+      background: var(--surface);
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 300px;
+    }
+
+    .pw-box h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .pw-box input {
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .pw-box input:focus {
+      border-color: var(--accent);
+    }
+
+    .pw-box button {
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .pw-box button.pw-close {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    #admin-sidebar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 320px;
+      z-index: 150;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    #admin-sidebar:not(.hidden) {
+      transform: translateX(0);
+    }
+
+    .admin-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .admin-header h3 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .admin-close {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .admin-close:hover {
+      color: var(--text);
+    }
+
+    #admin-list {
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .admin-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .admin-item-title {
+      font-size: 13px;
+      font-weight: 700;
+      word-break: break-all;
+    }
+
+    .admin-item-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .admin-item-actions button {
+      flex: 1;
+      padding: 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 11px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.2s;
+    }
+
+    .admin-item-actions button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .upload-section {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .upload-section h4 {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .upload-section input {
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      font-size: 11px;
+    }
+
+    .upload-section input[type="file"] {
+      font-family: inherit;
+    }
+
+    .upload-section button {
+      padding: 8px;
+      border-radius: 4px;
+      border: none;
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    #upload-status {
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 14px;
+    }
+
+    /* ── DROP ZONE OVERLAY ── */
+    #drop-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      background: linear-gradient(135deg, rgba(200, 240, 96, 0.15), rgba(96, 200, 240, 0.15));
+      backdrop-filter: blur(8px);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+    }
+
+    #drop-overlay.active {
+      display: flex;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #drop-overlay .drop-text {
+      font-family: 'Syne', sans-serif;
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: dropPulse 1.2s ease-in-out infinite;
+    }
+
+    #drop-overlay .drop-sub {
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    @keyframes dropPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.85; }
+    }
+
+    /* ── SHARE MODAL ── */
+    #share-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #share-overlay.visible {
+      display: flex;
+    }
+
+    .share-box {
+      background: var(--surface);
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 420px;
+      max-width: 90vw;
+    }
+
+    .share-box h3 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .share-box input {
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--accent);
+      outline: none;
+      font-family: monospace;
+      font-size: 12px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .share-box input:focus {
+      border-color: var(--accent);
+    }
+
+    .share-box .share-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .share-box button {
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: none;
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+    }
+
+    .share-box button.share-cancel {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ADMIN OVERLAYS -->
+  <div id="password-overlay" class="hidden">
+    <div class="pw-box">
+      <h3>Admin Access</h3>
+      <input type="password" id="pw-input" placeholder="Enter password" />
+      <button onclick="checkPassword()">Unlock</button>
+      <button class="pw-close" onclick="closePasswordOverlay()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="share-overlay">
+    <div class="share-box">
+      <h3>Share This Model</h3>
+      <input type="text" id="share-url" readonly />
+      <div class="share-actions">
+        <button onclick="copyShareLink()">Copy Link</button>
+        <button class="share-cancel" onclick="closeShareModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="drop-overlay">
+    <div class="drop-text">Drop it like it's hot</div>
+    <div class="drop-sub">Drop a .glb / .gltf / .obj file to preview</div>
+  </div>
+
+  <div id="admin-sidebar" class="hidden">
+    <div class="admin-header">
+      <h3>Model Database</h3>
+      <div class="admin-close" onclick="closeAdminMenu()">✕</div>
+    </div>
+
+    <div class="upload-section">
+      <h4>Upload New Model</h4>
+      <input type="password" id="gh-token" placeholder="GitHub API Token" />
+      <input type="file" id="gh-file" accept=".glb,.gltf,.obj" />
+      <button id="upload-btn" onclick="uploadModel()">Upload to GitHub</button>
+      <div id="upload-status"></div>
+    </div>
+
+    <div id="admin-list"></div>
+  </div>
+
+  <!-- LOADER -->
+  <div id="loader">
+    <div class="loader-logo">Loading Model</div>
+    <div class="loader-bar-wrap">
+      <div class="loader-bar" id="loader-bar"></div>
+    </div>
+    <div class="loader-pct" id="loader-pct">0%</div>
+  </div>
+
+  <!-- APP -->
+  <div id="app">
+    <header>
+      <div class="brand">ModelViewer | <span>By Matthew Ricci</span></div>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <div class="header-badge">
+          <div class="badge-dot"></div>
+          3D Packaging Viewer
+        </div>
+        <div class="hamburger" onclick="openAdminMenu()">☰</div>
+      </div>
+    </header>
+
+    <div id="canvas-wrap">
+      <!-- 3D canvas injected here -->
+
+      <div id="autorotate-group">
+        <div id="autorotate-badge" class="on" onclick="toggleAutorotate()">
+          <span id="ar-status">⟳ Auto-rotate: ON</span> <kbd
+            style="margin-left:4px; font-size:9px; vertical-align: middle;">Space</kbd>
+        </div>
+        <div id="speed-controls">
+          <button onclick="adjustSpeed(-1)" title="Decrease Speed">−</button>
+          <span id="speed-level">Level 2</span>
+          <button onclick="adjustSpeed(1)" title="Increase Speed">+</button>
+        </div>
+      </div>
+
+      <div id="side-panel">
+        <div class="panel-btn active" id="btn-wireframe" title="Toggle Wireframe" onclick="toggleWireframe()">⬡
+          Textures: ON</div>
+        <div class="panel-btn" id="btn-reset" title="Reset Camera" onclick="resetCamera()">⌖ Reset Camera</div>
+      </div>
+
+      <div id="controls-overlay">
+        <div class="ctrl-item"><kbd>Drag</kbd> Orbit</div>
+        <div class="ctrl-sep"></div>
+        <div class="ctrl-item"><kbd>Scroll</kbd> Zoom</div>
+        <div class="ctrl-sep"></div>
+        <div class="ctrl-item"><kbd>Right-drag</kbd> Pan</div>
+      </div>
+
+      <div id="error-msg">
+        <div class="error-icon">📦</div>
+        <div class="error-title">No Model Found</div>
+        <div class="error-sub">
+          Place your 3D file in the repo root and update the <code>MODEL_URL</code> variable at the top of this page's
+          script section. Supported formats: <code>.glb</code> &nbsp;<code>.gltf</code> &nbsp;<code>.obj</code>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="footer-left">Interactive 3D Preview</div>
+      <div class="footer-right">Scroll to zoom &nbsp;·&nbsp; Drag to rotate</div>
+    </footer>
+  </div>
+
+  <!-- THREE.JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // ─────────────────────────────────────────────────
+    //  ↓↓  ADMIN CONFIG  ↓↓
+    // ─────────────────────────────────────────────────
+    const ADMIN_PASSWORD = 'biscotti';
+    const GITHUB_USERNAME = 'mriccidesigns'; // e.g., 'matthewricci'
+    const GITHUB_REPO = 'ModelViewer';    // e.g., '3D-model-Viewer'
+    // ─────────────────────────────────────────────────
+
+    //  ↓↓  BRANDING  ↓↓
+    // ─────────────────────────────────────────────────
+    const BRAND_NAME = 'ModelViewer | <span>By Matthew Ricci</span>';  // shown in the header
+    // ─────────────────────────────────────────────────
+
+    document.querySelector('.brand').innerHTML = BRAND_NAME;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const MODEL_URL = urlParams.get('model');
+
+    // ── Scene ──
+    const wrap = document.getElementById('canvas-wrap');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.physicallyCorrectLights = true;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.shadowMap.enabled = true;
+    wrap.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);
+    camera.position.set(0, 0.5, 3);
+
+    // ── Lights ──
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    dirLight.position.set(3, 5, 3);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x60c8f0, 0.4);
+    fillLight.position.set(-3, 2, -3);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xc8f060, 0.3);
+    rimLight.position.set(0, -3, -2);
+    scene.add(rimLight);
+
+    // ── Orbit Controls (manual, no import needed) ──
+    let isDragging = false, isRightDrag = false;
+    let prevMouse = { x: 0, y: 0 };
+    let spherical = { theta: 0, phi: Math.PI / 2.5, r: 3 };
+    let target = new THREE.Vector3(0, 0, 0);
+    let autoRotate = true;
+    let wireframe = false;
+    let model = null;
+
+    function applyCamera() {
+      camera.position.set(
+        target.x + spherical.r * Math.sin(spherical.phi) * Math.sin(spherical.theta),
+        target.y + spherical.r * Math.cos(spherical.phi),
+        target.z + spherical.r * Math.sin(spherical.phi) * Math.cos(spherical.theta)
+      );
+      camera.lookAt(target);
+    }
+
+    const canvas = renderer.domElement;
+
+    canvas.addEventListener('mousedown', e => {
+      isDragging = true;
+      isRightDrag = e.button === 2;
+      prevMouse = { x: e.clientX, y: e.clientY };
+      if (!isRightDrag) {
+        autoRotate = false;
+        document.getElementById('ar-status').textContent = '⟳ Auto-rotate: OFF';
+        document.getElementById('autorotate-badge').classList.remove('on');
+      }
+    });
+    window.addEventListener('mouseup', () => { isDragging = false; });
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    window.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      const dx = e.clientX - prevMouse.x;
+      const dy = e.clientY - prevMouse.y;
+      if (isRightDrag) {
+        const panSpeed = 0.002 * spherical.r;
+        const right = new THREE.Vector3();
+        const up = new THREE.Vector3();
+        camera.getWorldDirection(new THREE.Vector3());
+        right.crossVectors(camera.getWorldDirection(new THREE.Vector3()), camera.up).normalize();
+        up.copy(camera.up).normalize();
+        target.addScaledVector(right, -dx * panSpeed);
+        target.addScaledVector(up, dy * panSpeed);
+      } else {
+        spherical.theta -= dx * 0.005;
+        spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi - dy * 0.005));
+      }
+      prevMouse = { x: e.clientX, y: e.clientY };
+    });
+
+    canvas.addEventListener('wheel', e => {
+      spherical.r = Math.max(0.5, Math.min(20, spherical.r + e.deltaY * 0.005));
+      e.preventDefault();
+    }, { passive: false });
+
+    // Touch support
+    let lastTouch = null, lastPinchDist = null;
+    canvas.addEventListener('touchstart', e => {
+      autoRotate = false;
+      document.getElementById('ar-status').textContent = '⟳ Auto-rotate: OFF';
+      document.getElementById('autorotate-badge').classList.remove('on');
+      if (e.touches.length === 1) lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      if (e.touches.length === 1 && lastTouch) {
+        const dx = e.touches[0].clientX - lastTouch.x;
+        const dy = e.touches[0].clientY - lastTouch.y;
+        spherical.theta -= dx * 0.006;
+        spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi - dy * 0.006));
+        lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+      if (e.touches.length === 2 && lastPinchDist) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        spherical.r = Math.max(0.5, Math.min(20, spherical.r - (dist - lastPinchDist) * 0.01));
+        lastPinchDist = dist;
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => { lastTouch = null; lastPinchDist = null; });
+
+    // ── Resize ──
+    function resize() {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // ── Load Model ──
+    function loadGLTF(url) {
+      // Inline minimal GLTF/GLB loader using THREE.FileLoader + JSON parse
+      // For real usage: include GLTFLoader from three/examples
+      // We'll load it via dynamic script injection
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+      document.head.appendChild(script);
+      script.onload = () => {
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+          url,
+          (gltf) => {
+            model = gltf.scene;
+
+            // Center & scale
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const scale = 2 / maxDim;
+            model.scale.setScalar(scale);
+            model.position.sub(center.multiplyScalar(scale));
+
+            model.traverse(child => {
+              if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            scene.add(model);
+            spherical.r = 3;
+            hideLoader();
+          },
+          (xhr) => {
+            if (xhr.lengthComputable) {
+              const pct = Math.round((xhr.loaded / xhr.total) * 100);
+              document.getElementById('loader-bar').style.width = pct + '%';
+              document.getElementById('loader-pct').textContent = pct + '%';
+            }
+          },
+          (err) => {
+            console.error('Model load error:', err);
+            hideLoader();
+            document.getElementById('error-msg').classList.add('visible');
+          }
+        );
+      };
+    }
+
+    function hideLoader() {
+      document.getElementById('loader').classList.add('hidden');
+    }
+
+    // ── Controls ──
+    function toggleAutorotate() {
+      autoRotate = !autoRotate;
+      document.getElementById('ar-status').textContent = `⟳ Auto-rotate: ${autoRotate ? 'ON' : 'OFF'}`;
+      document.getElementById('autorotate-badge').classList.toggle('on', autoRotate);
+    }
+
+    function toggleWireframe() {
+      wireframe = !wireframe;
+      if (model) {
+        model.traverse(child => {
+          if (child.isMesh && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(m => { m.wireframe = wireframe; });
+          }
+        });
+      }
+      const btn = document.getElementById('btn-wireframe');
+      btn.classList.toggle('active', !wireframe);
+      btn.innerHTML = `⬡ Textures: ${!wireframe ? 'ON' : 'OFF'}`;
+    }
+
+    function resetCamera() {
+      spherical = { theta: 0, phi: Math.PI / 2.5, r: 3 };
+      target.set(0, 0, 0);
+      autoRotate = true;
+      document.getElementById('ar-status').textContent = '⟳ Auto-rotate: ON';
+      document.getElementById('autorotate-badge').classList.add('on');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault(); // Prevent scrolling
+        toggleAutorotate();
+      }
+    });
+
+    // ── Animate ──
+    let clock = 0;
+    let speedLevel = 2;
+
+    function adjustSpeed(dir) {
+      speedLevel = Math.max(1, Math.min(10, speedLevel + dir));
+      document.getElementById('speed-level').textContent = `Level ${speedLevel}`;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (autoRotate) spherical.theta += (speedLevel * 0.002);
+      applyCamera();
+      renderer.render(scene, camera);
+    }
+
+    // ── Admin Logic ──
+    async function fetchModels() {
+      const list = document.getElementById('admin-list');
+      list.innerHTML = '<div style="padding: 20px; font-size: 12px; color: var(--muted);">Loading models from GitHub...</div>';
+
+      try {
+        const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/models/`);
+        let files = [];
+        if (res.status === 404) {
+          files = []; // Folder doesn't exist yet
+        } else if (!res.ok) {
+          throw new Error(`Repo not found (${res.status})`);
+        } else {
+          files = await res.json();
+        }
+        const models = files.filter(f => f.name.endsWith('.glb') || f.name.endsWith('.gltf') || f.name.endsWith('.obj'));
+
+        list.innerHTML = '';
+        if (models.length === 0) {
+          list.innerHTML = '<div style="padding: 20px; font-size: 12px; color: var(--muted);">No models found in the models/ folder. Upload one!</div>';
+          return;
+        }
+
+        models.forEach(file => {
+          const el = document.createElement('div');
+          el.className = 'admin-item';
+          el.innerHTML = `
+        <div class="admin-item-title">${file.name}</div>
+        <div class="admin-item-actions">
+          <button onclick="loadModelFromRepo('${file.name}')">▶ Load</button>
+          <button onclick="showShareLink('${file.name}')">🔗 Share</button>
+          <button onclick="deleteModel('${file.name}')">🗑 Delete</button>
+        </div>
+      `;
+          list.appendChild(el);
+        });
+      } catch (err) {
+        list.innerHTML = `<div style="padding: 20px; font-size: 12px; color: #ff6b6b;">Error: ${err.message}. Check your GITHUB_USERNAME and GITHUB_REPO variables.</div>`;
+      }
+    }
+
+    // ── Share Link ──
+    function showShareLink(filename) {
+      const baseUrl = window.location.origin + window.location.pathname;
+      const shareUrl = `${baseUrl}?model=models/${filename}`;
+      document.getElementById('share-url').value = shareUrl;
+      document.getElementById('share-overlay').classList.add('visible');
+    }
+
+    function copyShareLink() {
+      const input = document.getElementById('share-url');
+      input.select();
+      navigator.clipboard.writeText(input.value).then(() => {
+        const btn = input.parentElement.querySelector('button');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      });
+    }
+
+    function closeShareModal() {
+      document.getElementById('share-overlay').classList.remove('visible');
+    }
+
+    // ── Load model from repo ──
+    function loadModelFromRepo(filename) {
+      closeAdminMenu();
+      loadGLTF(`models/${filename}`);
+    }
+
+    // ── Delete model ──
+    async function deleteModel(filename) {
+      const token = document.getElementById('gh-token').value.trim();
+      if (!token) {
+        document.getElementById('upload-status').textContent = '⚠ Enter your GitHub token first.';
+        return;
+      }
+      if (!confirm(`Delete ${filename} from GitHub?`)) return;
+
+      try {
+        const res = await fetch(
+          `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/models/${filename}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/vnd.github.v3+json',
+            },
+          }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        document.getElementById('upload-status').textContent = `✓ Deleted ${filename}`;
+        fetchModels();
+      } catch (err) {
+        document.getElementById('upload-status').textContent = `✗ Delete failed: ${err.message}`;
+      }
+    }
+
+    // ── Drag & Drop Preview ──
+    let dragCounter = 0;
+
+    document.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      const overlay = document.getElementById('drop-overlay');
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => overlay.classList.add('active'));
+    });
+
+    document.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        const overlay = document.getElementById('drop-overlay');
+        overlay.classList.remove('active');
+        setTimeout(() => { if (!overlay.classList.contains('active')) overlay.style.display = 'none'; }, 250);
+      }
+    });
+
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      const overlay = document.getElementById('drop-overlay');
+      overlay.classList.remove('active');
+      setTimeout(() => overlay.style.display = 'none', 250);
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (['glb', 'gltf', 'obj'].includes(ext)) {
+          const url = URL.createObjectURL(file);
+          loadLocalModel(url);
+        } else {
+          alert('Unsupported file type. Please drop a .glb, .gltf, or .obj file.');
+        }
+      }
+    });
+
+    function loadLocalModel(url) {
+      if (model) {
+        scene.remove(model);
+        model.traverse(child => {
+          if (child.isMesh) {
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+            else child.material.dispose();
+          }
+        });
+        model = null;
+      }
+      hideLoader();
+      document.getElementById('error-msg').classList.remove('visible');
+      loadGLTF(url);
+    }
+
+    function openAdminMenu() {
+      if (sessionStorage.getItem('adminAuth') === 'true') {
+        fetchModels();
+        document.getElementById('admin-sidebar').classList.remove('hidden');
+        if (localStorage.getItem('gh_token')) {
+          document.getElementById('gh-token').value = localStorage.getItem('gh_token');
+        }
+      } else {
+        document.getElementById('password-overlay').classList.remove('hidden');
+        document.getElementById('pw-input').focus();
+        document.getElementById('pw-input').value = '';
+      }
+    }
+
+    async function uploadModel() {
+      const token = document.getElementById('gh-token').value.trim();
+      const fileInput = document.getElementById('gh-file');
+      const status = document.getElementById('upload-status');
+
+      if (!token) return status.textContent = 'Please enter GitHub Token';
+      if (!fileInput.files.length) return status.textContent = 'Please select a file';
+
+      localStorage.setItem('gh_token', token);
+      const file = fileInput.files[0];
+      status.textContent = 'Reading file...';
+      status.style.color = 'var(--muted)';
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        status.textContent = 'Uploading to GitHub...';
+
+        let sha = '';
+        try {
+          const checkRes = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/models/${file.name}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (checkRes.ok) {
+            const data = await checkRes.json();
+            sha = data.sha;
+          }
+        } catch (e) { }
+
+        const body = {
+          message: `Upload ${file.name} via Viewer Admin`,
+          content: base64Content
+        };
+        if (sha) body.sha = sha;
+
+        const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/models/${file.name}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.message || 'Upload failed');
+        }
+
+        status.textContent = '✓ Upload successful!';
+        status.style.color = 'var(--accent)';
+
+        fetchModels();
+        fileInput.value = '';
+      } catch (err) {
+        status.textContent = `✗ Error: ${err.message}`;
+        status.style.color = '#ff6b6b';
+      }
+    }
+
+    function closePasswordOverlay() {
+      document.getElementById('password-overlay').classList.add('hidden');
+    }
+
+    function checkPassword() {
+      const val = document.getElementById('pw-input').value;
+      if (val === ADMIN_PASSWORD) {
+        sessionStorage.setItem('adminAuth', 'true');
+        closePasswordOverlay();
+        openAdminMenu();
+      } else {
+        alert('Incorrect password');
+      }
+    }
+
+    document.getElementById('pw-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') checkPassword();
+    });
+
+    function closeAdminMenu() {
+      document.getElementById('admin-sidebar').classList.add('hidden');
+    }
+
+    function previewModel(modelName) {
+      closeAdminMenu();
+      if (model) {
+        scene.remove(model);
+        model = null;
+      }
+      resetCamera();
+
+      document.getElementById('loader').classList.remove('hidden');
+      document.getElementById('loader-bar').style.width = '0%';
+      document.getElementById('loader-pct').textContent = '0%';
+      document.getElementById('error-msg').classList.remove('visible');
+
+      const url = new URL(window.location);
+      url.searchParams.set('model', modelName);
+      window.history.pushState({}, '', url);
+
+      loadGLTF(modelName);
+    }
+
+    function copyLink(modelName, btn) {
+      const url = new URL(window.location);
+      url.searchParams.set('model', modelName);
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        const originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.color = 'var(--accent)';
+        btn.style.borderColor = 'var(--accent)';
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.color = '';
+          btn.style.borderColor = '';
+        }, 2000);
+      });
+    }
+
+    // ── Start ──
+    if (MODEL_URL) {
+      loadGLTF(MODEL_URL);
+      animate();
+    } else {
+      hideLoader();
+      const errorMsg = document.getElementById('error-msg');
+      errorMsg.classList.add('visible');
+      errorMsg.querySelector('.error-title').textContent = 'Secure Viewer';
+      errorMsg.querySelector('.error-sub').innerHTML = 'Please provide a valid direct link to view a 3D model.';
+    }
+  </script>
+</body>
+
+</html>
