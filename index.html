@@ -1163,14 +1163,13 @@
       try {
         const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/models/`);
         let files = [];
-        if (res.status === 404) {
-          files = []; // Folder doesn't exist yet
-        } else if (res.status === 403) {
-          throw new Error('Access Denied (403). Check your GitHub credentials.');
+        if (res.status === 404 || res.status === 403) {
+          files = []; // Folder doesn't exist yet or access denied - treat as empty
         } else if (!res.ok) {
           throw new Error(`Repo not found (${res.status}). Check GITHUB_USERNAME and GITHUB_REPO.`);
         } else {
           files = await res.json();
+          if (!Array.isArray(files)) files = [];
         }
         const models = files.filter(f => f.name.endsWith('.glb') || f.name.endsWith('.gltf') || f.name.endsWith('.obj'));
 
@@ -1390,7 +1389,12 @@
       }
     }
 
+    let isUploading = false;
+
     async function uploadModel() {
+      if (isUploading) return;
+      isUploading = true;
+
       const token = document.getElementById('gh-token').value.trim();
       const fileInput = document.getElementById('gh-file');
       const status = document.getElementById('upload-status');
@@ -1398,11 +1402,13 @@
       if (!token) {
         status.textContent = '⚠ Please enter GitHub Token';
         status.style.color = '#ffa500';
+        isUploading = false;
         return;
       }
       if (!fileInput.files.length) {
         status.textContent = '⚠ Please select a file';
         status.style.color = '#ffa500';
+        isUploading = false;
         return;
       }
 
@@ -1425,7 +1431,9 @@
             const data = await checkRes.json();
             sha = data.sha;
           }
-        } catch (e) { }
+        } catch (e) {
+          // File doesn't exist yet, which is fine
+        }
 
         const body = {
           message: `Upload ${file.name} via Viewer Admin`,
@@ -1449,20 +1457,25 @@
           } else if (res.status === 403) {
             throw new Error('Forbidden - Token may lack permissions');
           } else if (res.status === 404) {
-            throw new Error('Repo or models/ folder not found');
+            throw new Error('Repo not found or models/ folder needs to exist');
           }
           throw new Error(errData.message || 'Upload failed');
         }
 
         status.textContent = '✓ Upload successful!';
         status.style.color = 'var(--accent)';
-
-        fetchModels();
         fileInput.value = '';
-        setTimeout(() => { status.textContent = ''; }, 3000);
+
+        // Refresh model list after short delay
+        setTimeout(() => { 
+          fetchModels();
+          setTimeout(() => { status.textContent = ''; }, 2000);
+        }, 500);
       } catch (err) {
         status.textContent = `✗ Error: ${err.message}`;
         status.style.color = '#ff6b6b';
+      } finally {
+        isUploading = false;
       }
     }
 
