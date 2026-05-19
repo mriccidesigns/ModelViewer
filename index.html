@@ -777,7 +777,11 @@
 
     <div class="upload-section">
       <h4>Upload New Model</h4>
-      <input type="password" id="gh-token" placeholder="GitHub API Token" />
+      <div style="display: flex; gap: 8px;">
+        <input type="password" id="gh-token" placeholder="GitHub API Token" />
+        <button id="token-validate" onclick="validateTokenButton()" style="padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; white-space: nowrap; transition: all 0.2s;" title="Validate your GitHub token">✓ Check</button>
+      </div>
+      <div id="token-status" style="font-size: 10px; margin-top: 4px; min-height: 14px;"></div>
       <input type="file" id="gh-file" accept=".glb,.gltf,.obj" />
       <button id="upload-btn" onclick="uploadModel()">Upload to GitHub</button>
       <div id="upload-status"></div>
@@ -1010,14 +1014,36 @@
     resize();
 
     // ── Load Model ──
+    // ── Cache GLTFLoader to prevent stack overflow ──
+    let gltfLoaderReady = false;
+    let gltfLoaderCallbacks = [];
+
+    function ensureGLTFLoader(callback) {
+      if (gltfLoaderReady) {
+        callback();
+      } else {
+        gltfLoaderCallbacks.push(callback);
+        if (gltfLoaderCallbacks.length === 1) {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+          script.onload = () => {
+            gltfLoaderReady = true;
+            const cbs = gltfLoaderCallbacks;
+            gltfLoaderCallbacks = [];
+            cbs.forEach(cb => cb());
+          };
+          script.onerror = () => {
+            console.error('Failed to load GLTFLoader');
+            hideLoader();
+            document.getElementById('error-msg').classList.add('visible');
+          };
+          document.head.appendChild(script);
+        }
+      }
+    }
+
     function loadGLTF(url) {
-      // Inline minimal GLTF/GLB loader using THREE.FileLoader + JSON parse
-      // For real usage: include GLTFLoader from three/examples
-      // We'll load it via dynamic script injection
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
-      document.head.appendChild(script);
-      script.onload = () => {
+      ensureGLTFLoader(() => {
         const loader = new THREE.GLTFLoader();
         loader.load(
           url,
@@ -1057,7 +1083,7 @@
             document.getElementById('error-msg').classList.add('visible');
           }
         );
-      };
+      });
     }
 
     function hideLoader() {
@@ -1118,6 +1144,18 @@
     }
 
     // ── Admin Logic ──
+    async function validateGitHubToken(token) {
+      if (!token) return false;
+      try {
+        const res = await fetch('https://api.github.com/user', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        return res.ok;
+      } catch (e) {
+        return false;
+      }
+    }
+
     async function fetchModels() {
       const list = document.getElementById('admin-list');
       list.innerHTML = '<div style="padding: 20px; font-size: 12px; color: var(--muted);">Loading models from GitHub...</div>';
@@ -1127,8 +1165,10 @@
         let files = [];
         if (res.status === 404) {
           files = []; // Folder doesn't exist yet
+        } else if (res.status === 403) {
+          throw new Error('Access Denied (403). Check your GitHub credentials.');
         } else if (!res.ok) {
-          throw new Error(`Repo not found (${res.status})`);
+          throw new Error(`Repo not found (${res.status}). Check GITHUB_USERNAME and GITHUB_REPO.`);
         } else {
           files = await res.json();
         }
@@ -1136,7 +1176,7 @@
 
         list.innerHTML = '';
         if (models.length === 0) {
-          list.innerHTML = '<div style="padding: 20px; font-size: 12px; color: var(--muted);">No models found in the models/ folder. Upload one!</div>';
+          list.innerHTML = '<div style="padding: 20px; font-size: 12px; color: var(--muted);">No models found. Upload one to get started!</div>';
           return;
         }
 
@@ -1154,7 +1194,7 @@
           list.appendChild(el);
         });
       } catch (err) {
-        list.innerHTML = `<div style="padding: 20px; font-size: 12px; color: #ff6b6b;">Error: ${err.message}. Check your GITHUB_USERNAME and GITHUB_REPO variables.</div>`;
+        list.innerHTML = `<div style="padding: 20px; font-size: 12px; color: #ff6b6b;"><strong>Error:</strong> ${err.message}</div>`;
       }
     }
 
@@ -1164,6 +1204,49 @@
       const shareUrl = `${baseUrl}?model=models/${filename}`;
       document.getElementById('share-url').value = shareUrl;
       document.getElementById('share-overlay').classList.add('visible');
+    }
+
+    async function validateTokenButton() {
+      const token = document.getElementById('gh-token').value.trim();
+      const statusEl = document.getElementById('token-status');
+      const btn = document.getElementById('token-validate');
+
+      if (!token) {
+        statusEl.textContent = '⚠ Please enter a token';
+        statusEl.style.color = '#ffa500';
+        return;
+      }
+
+      btn.textContent = '⏳ Checking...';
+      btn.disabled = true;
+      statusEl.textContent = 'Validating...';
+      statusEl.style.color = 'var(--muted)';
+
+      const isValid = await validateGitHubToken(token);
+
+      if (isValid) {
+        statusEl.textContent = '✓ Token is valid!';
+        statusEl.style.color = 'var(--accent)';
+        btn.textContent = '✓ Valid';
+        btn.style.borderColor = 'var(--accent)';
+        btn.style.color = 'var(--accent)';
+        localStorage.setItem('gh_token', token);
+      } else {
+        statusEl.textContent = '✗ Invalid token or network error';
+        statusEl.style.color = '#ff6b6b';
+        btn.textContent = '✗ Failed';
+        btn.style.borderColor = '#ff6b6b';
+        btn.style.color = '#ff6b6b';
+      }
+
+      btn.disabled = false;
+      setTimeout(() => {
+        if (btn.textContent !== '✓ Valid' && btn.textContent !== '✗ Failed') {
+          btn.textContent = '✓ Check';
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }
+      }, 3000);
     }
 
     function copyShareLink() {
@@ -1190,11 +1273,17 @@
     // ── Delete model ──
     async function deleteModel(filename) {
       const token = document.getElementById('gh-token').value.trim();
+      const status = document.getElementById('upload-status');
+      
       if (!token) {
-        document.getElementById('upload-status').textContent = '⚠ Enter your GitHub token first.';
+        status.textContent = '⚠ Please enter your GitHub token first.';
+        status.style.color = '#ffa500';
         return;
       }
       if (!confirm(`Delete ${filename} from GitHub?`)) return;
+
+      status.textContent = '🗑 Deleting...';
+      status.style.color = 'var(--muted)';
 
       try {
         const res = await fetch(
@@ -1207,11 +1296,17 @@
             },
           }
         );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        document.getElementById('upload-status').textContent = `✓ Deleted ${filename}`;
+        if (!res.ok) {
+          if (res.status === 401) throw new Error('Unauthorized - Invalid token');
+          if (res.status === 403) throw new Error('Forbidden - Token lacks permissions');
+          throw new Error(`HTTP ${res.status}`);
+        }
+        status.textContent = `✓ Deleted ${filename}`;
+        status.style.color = 'var(--accent)';
         fetchModels();
       } catch (err) {
-        document.getElementById('upload-status').textContent = `✗ Delete failed: ${err.message}`;
+        status.textContent = `✗ Delete failed: ${err.message}`;
+        status.style.color = '#ff6b6b';
       }
     }
 
@@ -1280,11 +1375,14 @@
 
     function openAdminMenu() {
       if (sessionStorage.getItem('adminAuth') === 'true') {
-        fetchModels();
         document.getElementById('admin-sidebar').classList.remove('hidden');
+        const tokenInput = document.getElementById('gh-token');
         if (localStorage.getItem('gh_token')) {
-          document.getElementById('gh-token').value = localStorage.getItem('gh_token');
+          tokenInput.value = localStorage.getItem('gh_token');
         }
+        // Clear token status when opening
+        document.getElementById('token-status').textContent = '';
+        fetchModels();
       } else {
         document.getElementById('password-overlay').classList.remove('hidden');
         document.getElementById('pw-input').focus();
@@ -1297,18 +1395,26 @@
       const fileInput = document.getElementById('gh-file');
       const status = document.getElementById('upload-status');
 
-      if (!token) return status.textContent = 'Please enter GitHub Token';
-      if (!fileInput.files.length) return status.textContent = 'Please select a file';
+      if (!token) {
+        status.textContent = '⚠ Please enter GitHub Token';
+        status.style.color = '#ffa500';
+        return;
+      }
+      if (!fileInput.files.length) {
+        status.textContent = '⚠ Please select a file';
+        status.style.color = '#ffa500';
+        return;
+      }
 
       localStorage.setItem('gh_token', token);
       const file = fileInput.files[0];
-      status.textContent = 'Reading file...';
+      status.textContent = '📖 Reading file...';
       status.style.color = 'var(--muted)';
 
       try {
         const arrayBuffer = await file.arrayBuffer();
         const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-        status.textContent = 'Uploading to GitHub...';
+        status.textContent = '⏳ Uploading to GitHub...';
 
         let sha = '';
         try {
@@ -1338,6 +1444,13 @@
 
         if (!res.ok) {
           const errData = await res.json();
+          if (res.status === 401) {
+            throw new Error('Unauthorized - Invalid token');
+          } else if (res.status === 403) {
+            throw new Error('Forbidden - Token may lack permissions');
+          } else if (res.status === 404) {
+            throw new Error('Repo or models/ folder not found');
+          }
           throw new Error(errData.message || 'Upload failed');
         }
 
@@ -1346,6 +1459,7 @@
 
         fetchModels();
         fileInput.value = '';
+        setTimeout(() => { status.textContent = ''; }, 3000);
       } catch (err) {
         status.textContent = `✗ Error: ${err.message}`;
         status.style.color = '#ff6b6b';
