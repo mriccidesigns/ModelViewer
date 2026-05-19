@@ -852,7 +852,7 @@
     </div>
 
     <footer>
-      <div class="footer-left">Interactive 3D Preview</div>
+      <div class="footer-left">Interactive 3D Preview · By Matthew Ricci</div>
       <div class="footer-right">Scroll to zoom &nbsp;·&nbsp; Drag to rotate</div>
     </footer>
   </div>
@@ -1223,7 +1223,12 @@
       list.innerHTML = '<div style="padding: 20px; font-size: 12px; color: var(--muted);">Loading models from GitHub...</div>';
 
       try {
-        const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/models/`);
+        // Use token if available for private repos or folders
+        const token = document.getElementById('gh-token').value.trim();
+        let headers = { 'Accept': 'application/vnd.github.v3+json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/models/`, { headers });
         let files = [];
         if (res.status === 404 || res.status === 403) {
           files = []; // Folder doesn't exist yet or access denied - treat as empty
