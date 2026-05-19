@@ -802,7 +802,7 @@
   <!-- APP -->
   <div id="app">
     <header>
-      <div class="brand">ModelViewer | <span>By Matthew Ricci</span></div>
+      <div class="brand">ModelViewer</div>
       <div style="display: flex; align-items: center; gap: 16px;">
         <div class="header-badge">
           <div class="badge-dot"></div>
@@ -870,7 +870,7 @@
 
     //  ↓↓  BRANDING  ↓↓
     // ─────────────────────────────────────────────────
-    const BRAND_NAME = 'ModelViewer | <span>By Matthew Ricci</span>';  // shown in the header
+    const BRAND_NAME = 'ModelViewer';  // shown in the header
     // ─────────────────────────────────────────────────
 
     document.querySelector('.brand').innerHTML = BRAND_NAME;
@@ -1014,76 +1014,138 @@
     resize();
 
     // ── Load Model ──
-    // ── Cache GLTFLoader to prevent stack overflow ──
     let gltfLoaderReady = false;
-    let gltfLoaderCallbacks = [];
+    let objLoaderReady = false;
 
-    function ensureGLTFLoader(callback) {
-      if (gltfLoaderReady) {
-        callback();
-      } else {
-        gltfLoaderCallbacks.push(callback);
-        if (gltfLoaderCallbacks.length === 1) {
-          const script = document.createElement('script');
-          script.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
-          script.onload = () => {
-            gltfLoaderReady = true;
-            const cbs = gltfLoaderCallbacks;
-            gltfLoaderCallbacks = [];
-            cbs.forEach(cb => cb());
-          };
-          script.onerror = () => {
-            console.error('Failed to load GLTFLoader');
-            hideLoader();
-            document.getElementById('error-msg').classList.add('visible');
-          };
-          document.head.appendChild(script);
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) return resolve();
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function ensureLoader(type) {
+      if (type === 'gltf') {
+        if (!gltfLoaderReady) {
+          await loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js');
+          gltfLoaderReady = true;
+        }
+      } else if (type === 'obj') {
+        if (!objLoaderReady) {
+          await loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js');
+          objLoaderReady = true;
         }
       }
     }
 
-    function loadGLTF(url) {
-      ensureGLTFLoader(() => {
-        const loader = new THREE.GLTFLoader();
-        loader.load(
-          url,
-          (gltf) => {
-            model = gltf.scene;
+    function getFileExtension(name) {
+      return name.split('.').pop().toLowerCase();
+    }
 
-            // Center & scale
-            const box = new THREE.Box3().setFromObject(model);
-            const size = box.getSize(new THREE.Vector3());
-            const center = box.getCenter(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const scale = 2 / maxDim;
-            model.scale.setScalar(scale);
-            model.position.sub(center.multiplyScalar(scale));
+    async function loadGLTF(url) {
+      await ensureLoader('gltf');
+      const loader = new THREE.GLTFLoader();
+      loader.load(
+        url,
+        (gltf) => {
+          model = gltf.scene;
 
-            model.traverse(child => {
-              if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-              }
-            });
+          // Center & scale
+          const box = new THREE.Box3().setFromObject(model);
+          const size = box.getSize(new THREE.Vector3());
+          const center = box.getCenter(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const scale = 2 / maxDim;
+          model.scale.setScalar(scale);
+          model.position.sub(center.multiplyScalar(scale));
 
-            scene.add(model);
-            spherical.r = 3;
-            hideLoader();
-          },
-          (xhr) => {
-            if (xhr.lengthComputable) {
-              const pct = Math.round((xhr.loaded / xhr.total) * 100);
-              document.getElementById('loader-bar').style.width = pct + '%';
-              document.getElementById('loader-pct').textContent = pct + '%';
+          model.traverse(child => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
             }
-          },
-          (err) => {
-            console.error('Model load error:', err);
-            hideLoader();
-            document.getElementById('error-msg').classList.add('visible');
+          });
+
+          scene.add(model);
+          spherical.r = 3;
+          hideLoader();
+        },
+        (xhr) => {
+          if (xhr.lengthComputable) {
+            const pct = Math.round((xhr.loaded / xhr.total) * 100);
+            document.getElementById('loader-bar').style.width = pct + '%';
+            document.getElementById('loader-pct').textContent = pct + '%';
           }
-        );
-      });
+        },
+        (err) => {
+          console.error('Model load error:', err);
+          hideLoader();
+          document.getElementById('error-msg').classList.add('visible');
+        }
+      );
+    }
+
+    async function loadOBJ(url) {
+      await ensureLoader('obj');
+      const loader = new THREE.OBJLoader();
+      loader.load(
+        url,
+        (object) => {
+          model = object;
+
+          const box = new THREE.Box3().setFromObject(model);
+          const size = box.getSize(new THREE.Vector3());
+          const center = box.getCenter(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const scale = 2 / maxDim;
+          model.scale.setScalar(scale);
+          model.position.sub(center.multiplyScalar(scale));
+
+          model.traverse(child => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+
+          scene.add(model);
+          spherical.r = 3;
+          hideLoader();
+        },
+        (xhr) => {
+          if (xhr.lengthComputable) {
+            const pct = Math.round((xhr.loaded / xhr.total) * 100);
+            document.getElementById('loader-bar').style.width = pct + '%';
+            document.getElementById('loader-pct').textContent = pct + '%';
+          }
+        },
+        (err) => {
+          console.error('Model load error:', err);
+          hideLoader();
+          document.getElementById('error-msg').classList.add('visible');
+        }
+      );
+    }
+
+    function loadModel(url, filename) {
+      const loaderEl = document.getElementById('loader');
+      if (loaderEl.classList.contains('hidden')) loaderEl.classList.remove('hidden');
+      document.getElementById('loader-bar').style.width = '0%';
+      document.getElementById('loader-pct').textContent = '0%';
+      document.getElementById('error-msg').classList.remove('visible');
+
+      const cleaned = filename ? filename : url;
+      const ext = getFileExtension(cleaned);
+      if (ext === 'obj') {
+        loadOBJ(url);
+      } else {
+        loadGLTF(url);
+      }
     }
 
     function hideLoader() {
@@ -1266,7 +1328,7 @@
     // ── Load model from repo ──
     function loadModelFromRepo(filename) {
       closeAdminMenu();
-      loadGLTF(`models/${filename}`);
+      loadModel(`models/${filename}`, filename);
     }
 
     // ── Delete model ──
@@ -1333,6 +1395,7 @@
 
     document.addEventListener('dragover', (e) => {
       e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     });
 
     document.addEventListener('drop', (e) => {
@@ -1348,14 +1411,14 @@
         const ext = file.name.split('.').pop().toLowerCase();
         if (['glb', 'gltf', 'obj'].includes(ext)) {
           const url = URL.createObjectURL(file);
-          loadLocalModel(url);
+          loadLocalModel(url, file.name);
         } else {
           alert('Unsupported file type. Please drop a .glb, .gltf, or .obj file.');
         }
       }
     });
 
-    function loadLocalModel(url) {
+    function loadLocalModel(url, filename) {
       if (model) {
         scene.remove(model);
         model.traverse(child => {
@@ -1369,7 +1432,7 @@
       }
       hideLoader();
       document.getElementById('error-msg').classList.remove('visible');
-      loadGLTF(url);
+      loadModel(url, filename);
     }
 
     function openAdminMenu() {
@@ -1390,6 +1453,16 @@
     }
 
     let isUploading = false;
+
+    function arrayBufferToBase64(arrayBuffer) {
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
+    }
 
     async function uploadModel() {
       if (isUploading) return;
@@ -1419,7 +1492,7 @@
 
       try {
         const arrayBuffer = await file.arrayBuffer();
-        const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        const base64Content = arrayBufferToBase64(arrayBuffer);
         status.textContent = '⏳ Uploading to GitHub...';
 
         let sha = '';
@@ -1519,7 +1592,7 @@
       url.searchParams.set('model', modelName);
       window.history.pushState({}, '', url);
 
-      loadGLTF(modelName);
+      loadModel(modelName, modelName);
     }
 
     function copyLink(modelName, btn) {
@@ -1540,7 +1613,7 @@
 
     // ── Start ──
     if (MODEL_URL) {
-      loadGLTF(MODEL_URL);
+      loadModel(MODEL_URL);
       animate();
     } else {
       hideLoader();
