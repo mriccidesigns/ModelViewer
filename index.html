@@ -176,6 +176,11 @@
       left: 0;
       z-index: 2;
       pointer-events: auto;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
     }
 
     /* ── CONTROLS OVERLAY ── */
@@ -940,6 +945,9 @@
     canvas.addEventListener('click', () => {
       canvas.focus();
     });
+    
+    // Add tabindex to make canvas focusable
+    canvas.setAttribute('tabindex', '0');
 
     canvas.addEventListener('mousedown', e => {
       isDragging = true;
@@ -974,6 +982,15 @@
       prevMouse = { x: e.clientX, y: e.clientY };
     });
 
+    // Use window for wheel events to ensure they work even when canvas doesn't have focus
+    window.addEventListener('wheel', e => {
+      if (document.activeElement === canvas || document.body.contains(canvas)) {
+        spherical.r = Math.max(0.5, Math.min(20, spherical.r + e.deltaY * 0.005));
+        e.preventDefault();
+      }
+    }, { passive: false });
+    
+    // Also listen on canvas directly
     canvas.addEventListener('wheel', e => {
       spherical.r = Math.max(0.5, Math.min(20, spherical.r + e.deltaY * 0.005));
       e.preventDefault();
