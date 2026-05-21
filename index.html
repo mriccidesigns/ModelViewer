@@ -154,6 +154,7 @@
       position: relative;
       overflow: hidden;
       z-index: 1;
+      pointer-events: none; /* Let events pass through to canvas */
     }
 
     #canvas-wrap::before {
@@ -1124,6 +1125,10 @@
               child.receiveShadow = true;
               // Make sure meshes are visible and not blocking interaction
               child.material.transparent = false;
+              // Allow pointer events to pass through meshes to the canvas
+              if (child.material.map) {
+                child.material.alphaTest = 0.5;
+              }
             }
           });
 
@@ -1208,6 +1213,10 @@
               child.castShadow = true;
               child.receiveShadow = true;
               child.material.transparent = false;
+              // Allow pointer events to pass through meshes to the canvas
+              if (child.material.map) {
+                child.material.alphaTest = 0.5;
+              }
             }
           });
 
