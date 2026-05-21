@@ -841,7 +841,7 @@
         <div class="ctrl-item"><kbd>Right-drag</kbd> Pan</div>
       </div>
 
-      <div id="error-msg">
+      <div id="error-msg" class="hidden">
         <div class="error-icon">📦</div>
         <div class="error-title">No Model Found</div>
         <div class="error-sub">
@@ -1264,6 +1264,7 @@
         // Clear the list and add all models
         list.innerHTML = '';
         models.forEach(file => {
+          console.log('Adding model to list:', file.name);
           const el = document.createElement('div');
           el.className = 'admin-item';
           el.innerHTML = `
@@ -1352,7 +1353,18 @@
 
     // ── Load model from repo ──
     function loadModelFromRepo(filename) {
+      console.log('Loading model from repo:', filename);
       closeAdminMenu();
+      
+      // Clear any existing error message
+      document.getElementById('error-msg').classList.remove('visible');
+      
+      // Show loader and reset progress
+      const loaderEl = document.getElementById('loader');
+      loaderEl.classList.remove('hidden');
+      document.getElementById('loader-bar').style.width = '0%';
+      document.getElementById('loader-pct').textContent = '0%';
+      
       loadModel(`models/${filename}`, filename);
     }
 
