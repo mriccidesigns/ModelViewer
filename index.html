@@ -1048,11 +1048,15 @@
     }
 
     async function loadGLTF(url) {
+      console.log('loadGLTF called with URL:', url);
       await ensureLoader('gltf');
+      console.log('GLTFLoader ready:', THREE.GLTFLoader ? 'YES' : 'NO');
+      
       const loader = new THREE.GLTFLoader();
       loader.load(
         url,
         (gltf) => {
+          console.log('Model loaded successfully:', gltf);
           model = gltf.scene;
 
           // Center & scale
@@ -1085,17 +1089,26 @@
         (err) => {
           console.error('Model load error:', err);
           hideLoader();
-          document.getElementById('error-msg').classList.add('visible');
+          
+          // Show error message with details
+          const errorMsg = document.getElementById('error-msg');
+          errorMsg.querySelector('.error-title').textContent = 'Load Failed';
+          errorMsg.querySelector('.error-sub').innerHTML = `Failed to load model. Check the console for details.<br><code>${err.message || 'Unknown error'}</code>`;
+          errorMsg.classList.add('visible');
         }
       );
     }
 
     async function loadOBJ(url) {
+      console.log('loadOBJ called with URL:', url);
       await ensureLoader('obj');
+      console.log('OBJLoader ready:', THREE.OBJLoader ? 'YES' : 'NO');
+      
       const loader = new THREE.OBJLoader();
       loader.load(
         url,
         (object) => {
+          console.log('Model loaded successfully:', object);
           model = object;
 
           const box = new THREE.Box3().setFromObject(model);
@@ -1127,12 +1140,19 @@
         (err) => {
           console.error('Model load error:', err);
           hideLoader();
-          document.getElementById('error-msg').classList.add('visible');
+          
+          // Show error message with details
+          const errorMsg = document.getElementById('error-msg');
+          errorMsg.querySelector('.error-title').textContent = 'Load Failed';
+          errorMsg.querySelector('.error-sub').innerHTML = `Failed to load model. Check the console for details.<br><code>${err.message || 'Unknown error'}</code>`;
+          errorMsg.classList.add('visible');
         }
       );
     }
 
     function loadModel(url, filename) {
+      console.log('loadModel called:', { url, filename });
+      
       // Clear any existing error message
       document.getElementById('error-msg').classList.remove('visible');
       
@@ -1146,6 +1166,8 @@
 
       const cleaned = filename ? filename : url;
       const ext = getFileExtension(cleaned);
+      console.log('File extension:', ext);
+      
       if (ext === 'obj') {
         loadOBJ(url);
       } else {
@@ -1365,7 +1387,10 @@
       document.getElementById('loader-bar').style.width = '0%';
       document.getElementById('loader-pct').textContent = '0%';
       
-      loadModel(`models/${filename}`, filename);
+      // Use raw GitHub URL for loading models from the repo
+      const rawUrl = `https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/main/models/${filename}`;
+      console.log('Loading model from:', rawUrl);
+      loadModel(rawUrl, filename);
     }
 
     // ── Delete model ──
@@ -1416,11 +1441,12 @@
       e.stopPropagation();
       dragCounter++;
       const overlay = document.getElementById('drop-overlay');
-      if (overlay) {
+      if (overlay && !overlay.classList.contains('active')) {
         overlay.style.display = 'flex';
         requestAnimationFrame(() => {
           overlay.classList.add('active');
         });
+        console.log('Drag enter - showing drop overlay');
       }
     });
 
@@ -1431,13 +1457,14 @@
       if (dragCounter <= 0) {
         dragCounter = 0;
         const overlay = document.getElementById('drop-overlay');
-        if (overlay) {
+        if (overlay && overlay.classList.contains('active')) {
           overlay.classList.remove('active');
           setTimeout(() => { 
             if (!overlay.classList.contains('active')) {
               overlay.style.display = 'none';
             }
           }, 250);
+          console.log('Drag leave - hiding drop overlay');
         }
       }
     });
@@ -1445,7 +1472,9 @@
     document.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
     });
 
     document.addEventListener('drop', (e) => {
@@ -1453,7 +1482,7 @@
       e.stopPropagation();
       dragCounter = 0;
       const overlay = document.getElementById('drop-overlay');
-      if (overlay) {
+      if (overlay && overlay.classList.contains('active')) {
         overlay.classList.remove('active');
         setTimeout(() => { 
           if (!overlay.classList.contains('active')) {
@@ -1463,11 +1492,19 @@
       }
 
       const files = e.dataTransfer.files;
+      console.log('Files dropped:', files.length);
+      
       if (files.length > 0) {
         const file = files[0];
+        console.log('First file:', file.name, 'Type:', file.type);
+        
+        // Check file extension
         const ext = file.name.split('.').pop().toLowerCase();
+        console.log('File extension:', ext);
+        
         if (['glb', 'gltf', 'obj'].includes(ext)) {
           const url = URL.createObjectURL(file);
+          console.log('Loading local model with URL:', url);
           loadLocalModel(url, file.name);
         } else {
           alert('Unsupported file type. Please drop a .glb, .gltf, or .obj file.');
