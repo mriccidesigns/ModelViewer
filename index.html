@@ -167,6 +167,8 @@
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
     dirLight.position.set(3, 5, 3);
     dirLight.castShadow = true;
+    dirLight.shadow.bias = -0.0001;
+    dirLight.shadow.normalBias = 0.02;
     scene.add(dirLight);
 
     const fillLight = new THREE.DirectionalLight(0x60c8f0, 0.4);
