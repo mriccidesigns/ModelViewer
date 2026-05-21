@@ -170,6 +170,7 @@
       display: block;
       width: 100% !important;
       height: 100% !important;
+      pointer-events: auto;
     }
 
     /* ── CONTROLS OVERLAY ── */
@@ -930,6 +931,11 @@
 
     const canvas = renderer.domElement;
 
+    // Ensure canvas gets focus on click for keyboard controls
+    canvas.addEventListener('click', () => {
+      canvas.focus();
+    });
+
     canvas.addEventListener('mousedown', e => {
       isDragging = true;
       isRightDrag = e.button === 2;
@@ -1073,12 +1079,20 @@
           
           model = gltf.scene;
 
-          // Center & scale
+          // Center & scale - use more reasonable scaling
           const box = new THREE.Box3().setFromObject(model);
           const size = box.getSize(new THREE.Vector3());
           const center = box.getCenter(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z);
-          const scale = 2 / maxDim;
+          
+          // Scale to fit in a reasonable range (not too big, not too small)
+          let scale = 1;
+          if (maxDim > 10) {
+            scale = 5 / maxDim;  // Large models get smaller
+          } else if (maxDim < 1) {
+            scale = 2 / maxDim;  // Small models get larger
+          }
+          
           model.scale.setScalar(scale);
           model.position.sub(center.multiplyScalar(scale));
 
@@ -1086,14 +1100,18 @@
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              // Make sure meshes are visible and not blocking interaction
+              child.material.transparent = false;
             }
           });
 
           scene.add(model);
           
-          // Reset camera
+          // Reset camera with better distance calculation
           target.set(0, 0, 0);
-          spherical.r = Math.max(1, maxDim / 2);
+          // Camera distance should be based on scaled model size
+          const scaledSize = maxDim * scale;
+          spherical.r = Math.max(2, scaledSize * 1.5);  // Keep some breathing room
           applyCamera();
           
           // Force a render to show the model immediately
@@ -1151,7 +1169,15 @@
           const size = box.getSize(new THREE.Vector3());
           const center = box.getCenter(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z);
-          const scale = 2 / maxDim;
+          
+          // Scale to fit in a reasonable range
+          let scale = 1;
+          if (maxDim > 10) {
+            scale = 5 / maxDim;
+          } else if (maxDim < 1) {
+            scale = 2 / maxDim;
+          }
+          
           model.scale.setScalar(scale);
           model.position.sub(center.multiplyScalar(scale));
 
@@ -1159,14 +1185,16 @@
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              child.material.transparent = false;
             }
           });
 
           scene.add(model);
           
-          // Reset camera
+          // Reset camera with better distance calculation
           target.set(0, 0, 0);
-          spherical.r = Math.max(1, maxDim / 2);
+          const scaledSize = maxDim * scale;
+          spherical.r = Math.max(2, scaledSize * 1.5);
           applyCamera();
           
           // Force a render to show the model immediately
