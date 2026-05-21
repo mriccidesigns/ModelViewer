@@ -1228,17 +1228,26 @@
         let headers = { 'Accept': 'application/vnd.github.v3+json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
         
+        console.log('Fetching models from GitHub...');
+        console.log('Headers:', headers);
+        
         const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/models/`, { headers });
+        console.log('GitHub API response status:', res.status);
+        
         let files = [];
         if (res.status === 404 || res.status === 403) {
+          console.log('Models folder not found or access denied');
           files = []; // Folder doesn't exist yet or access denied - treat as empty
         } else if (!res.ok) {
           throw new Error(`Repo not found (${res.status}). Check GITHUB_USERNAME and GITHUB_REPO.`);
         } else {
           files = await res.json();
+          console.log('Files received:', files);
           if (!Array.isArray(files)) files = [];
         }
+        
         const models = files.filter(f => f.name.endsWith('.glb') || f.name.endsWith('.gltf') || f.name.endsWith('.obj'));
+        console.log('Models found:', models);
 
         list.innerHTML = '';
         if (models.length === 0) {
@@ -1260,6 +1269,7 @@
           list.appendChild(el);
         });
       } catch (err) {
+        console.error('Error fetching models:', err);
         list.innerHTML = `<div style="padding: 20px; font-size: 12px; color: #ff6b6b;"><strong>Error:</strong> ${err.message}</div>`;
       }
     }
