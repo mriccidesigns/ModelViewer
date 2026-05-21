@@ -1057,6 +1057,20 @@
         url,
         (gltf) => {
           console.log('Model loaded successfully:', gltf);
+          
+          // Remove existing model if present
+          if (model) {
+            scene.remove(model);
+            model.traverse(child => {
+              if (child.isMesh) {
+                child.geometry?.dispose();
+                if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                else child.material.dispose();
+              }
+            });
+            model = null;
+          }
+          
           model = gltf.scene;
 
           // Center & scale
@@ -1076,7 +1090,15 @@
           });
 
           scene.add(model);
-          spherical.r = 3;
+          
+          // Reset camera
+          target.set(0, 0, 0);
+          spherical.r = Math.max(1, maxDim / 2);
+          applyCamera();
+          
+          // Force a render to show the model immediately
+          renderer.render(scene, camera);
+          
           hideLoader();
         },
         (xhr) => {
@@ -1109,6 +1131,20 @@
         url,
         (object) => {
           console.log('Model loaded successfully:', object);
+          
+          // Remove existing model if present
+          if (model) {
+            scene.remove(model);
+            model.traverse(child => {
+              if (child.isMesh) {
+                child.geometry?.dispose();
+                if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                else child.material.dispose();
+              }
+            });
+            model = null;
+          }
+          
           model = object;
 
           const box = new THREE.Box3().setFromObject(model);
@@ -1127,7 +1163,15 @@
           });
 
           scene.add(model);
-          spherical.r = 3;
+          
+          // Reset camera
+          target.set(0, 0, 0);
+          spherical.r = Math.max(1, maxDim / 2);
+          applyCamera();
+          
+          // Force a render to show the model immediately
+          renderer.render(scene, camera);
+          
           hideLoader();
         },
         (xhr) => {
