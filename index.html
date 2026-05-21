@@ -1133,11 +1133,16 @@
     }
 
     function loadModel(url, filename) {
+      // Clear any existing error message
+      document.getElementById('error-msg').classList.remove('visible');
+      
+      // Show loader
       const loaderEl = document.getElementById('loader');
-      if (loaderEl.classList.contains('hidden')) loaderEl.classList.remove('hidden');
+      loaderEl.classList.remove('hidden');
+      
+      // Reset loader progress
       document.getElementById('loader-bar').style.width = '0%';
       document.getElementById('loader-pct').textContent = '0%';
-      document.getElementById('error-msg').classList.remove('visible');
 
       const cleaned = filename ? filename : url;
       const ext = getFileExtension(cleaned);
@@ -1247,6 +1252,7 @@
         }
         
         const models = files.filter(f => f.name.endsWith('.glb') || f.name.endsWith('.gltf') || f.name.endsWith('.obj'));
+        console.log('All files from GitHub:', files);
         console.log('Models found:', models);
 
         list.innerHTML = '';
@@ -1255,6 +1261,8 @@
           return;
         }
 
+        // Clear the list and add all models
+        list.innerHTML = '';
         models.forEach(file => {
           const el = document.createElement('div');
           el.className = 'admin-item';
@@ -1268,6 +1276,8 @@
       `;
           list.appendChild(el);
         });
+        
+        console.log('Admin list updated with', models.length, 'models');
       } catch (err) {
         console.error('Error fetching models:', err);
         list.innerHTML = `<div style="padding: 20px; font-size: 12px; color: #ff6b6b;"><strong>Error:</strong> ${err.message}</div>`;
@@ -1454,6 +1464,10 @@
     });
 
     function loadLocalModel(url, filename) {
+      // Clear any existing error message
+      document.getElementById('error-msg').classList.remove('visible');
+      
+      // Remove previous model if exists
       if (model) {
         scene.remove(model);
         model.traverse(child => {
@@ -1465,8 +1479,13 @@
         });
         model = null;
       }
-      hideLoader();
-      document.getElementById('error-msg').classList.remove('visible');
+      
+      // Show loader and reset progress
+      const loaderEl = document.getElementById('loader');
+      loaderEl.classList.remove('hidden');
+      document.getElementById('loader-bar').style.width = '0%';
+      document.getElementById('loader-pct').textContent = '0%';
+      
       loadModel(url, filename);
     }
 
