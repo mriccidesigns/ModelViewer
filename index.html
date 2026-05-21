@@ -153,6 +153,7 @@
     #canvas-wrap {
       position: relative;
       overflow: hidden;
+      z-index: 1;
     }
 
     #canvas-wrap::before {
@@ -170,6 +171,10 @@
       display: block;
       width: 100% !important;
       height: 100% !important;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
       pointer-events: auto;
     }
 
